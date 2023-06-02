@@ -1,11 +1,34 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from sklearn.model_selection import KFold
 from sklearn.cluster import KMeans
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
 
 pd.set_option('display.max_columns', None)
+
+
+def kfold_for_model(model):
+    # K-fold 교차 검증 설정
+    kfold = KFold(n_splits=5, shuffle=True, random_state=1)
+    # K-fold 교차 검증 수행
+    mse_scores = []
+    for train_index, eval_index in kfold.split(X):
+        X_train, X_eval = X.iloc[train_index], X.iloc[eval_index]
+        y_train, y_eval = y.iloc[train_index], y.iloc[eval_index]
+        # 모델 학습
+        model.fit(X_train, y_train)
+        # 평가 데이터에 대한 예측
+        y_eval_pred = model.predict(X_eval)
+        # 평가 지표(MSE) 계산
+        mse = mean_squared_error(y_eval, y_eval_pred)
+        mse_scores.append(mse)
+    # K-fold 교차 검증 평균 MSE 계산
+    mean_mse = np.mean(mse_scores)
+    print(model, "의 평균 MSE:", mean_mse)
+
 
 data = pd.read_csv("C://Users//-//Downloads//archive//kbopitchingdata.csv", encoding='CP949')
 # NaN값 및 불필요한 데이터 제거()
@@ -18,8 +41,11 @@ positive_columns = ['평균 연령', '탈삼진 볼넷 비율', '세이브', '9�
 negative_columns = ['ERA', '9이닝당 실점', '9이닝당 피홈런', 'WHIP']
 X = df.drop(columns=['승률', '연도', '팀'])  # 예측에 사용할 특성들
 y = df['승률']  # 타겟 변수 (승률)
+
 # 랜덤 포레스트 모델 학습
 rf = RandomForestRegressor()
+kfold_for_model(rf)
+
 rf.fit(X, y)
 # 특성 중요도 계산, 중요도 표준화
 importance = rf.feature_importances_
@@ -31,6 +57,7 @@ df['점수'] = df[positive_columns].dot(normalized_importance[:len(positive_colu
 # 클러스터링 / KMeans 모델 학습
 X = df[['점수', '승률']]
 kmeans = KMeans(n_clusters=10, random_state=1)
+kfold_for_model(kmeans)
 kmeans.fit(X)
 df['Cluster'] = kmeans.labels_
 
@@ -51,12 +78,13 @@ features = ['평균 연령', 'ERA', '9이닝당 실점', '세이브', 'WHIP', '9
 # Linear Regression 모델 학습 및 이번 시즌 종료시 데이터 예측
 df_predict = data_2023.copy()
 df_predict['경기'] = 144
-X_train = data_2023[features]
-y_train = data_2023['승률']
+X_2023 = data_2023[features]
+y_2023 = data_2023['승률']
 X_predict = df_predict[features]
-model = LinearRegression()
-model.fit(X_train, y_train)
-y_predict = model.predict(X_predict)
+lr = LinearRegression()
+kfold_for_model(lr)
+lr.fit(X_2023, y_2023)
+y_predict = lr.predict(X_predict)
 df_predict['승률'] = y_predict.round(3)
 df_predict = df_predict.drop(columns=["경기"])
 
